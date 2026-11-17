@@ -165,7 +165,11 @@ def make_cookie_cursor():
             data[8:10] = (4).to_bytes(2, 'little')
             with open(path, 'wb') as f:
                 f.write(data)
+        from ctypes import wintypes
         user32 = ctypes.windll.user32
+        user32.LoadImageW.restype = wintypes.HANDLE
+        user32.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        user32.SetSystemCursor.argtypes = [wintypes.HANDLE, wintypes.DWORD]
         handle = user32.LoadImageW(None, path, 2, 0, 0, 0x0010)
         if handle:
             user32.SetSystemCursor(handle, 32512)
