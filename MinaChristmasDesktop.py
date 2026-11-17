@@ -141,6 +141,68 @@ def res(name):
     return os.path.join(base, "assets", name)
 
 
+def make_cookie_cursor():
+    if not IS_WIN:
+        return
+    try:
+        from PIL import Image, ImageDraw
+        import ctypes, io
+        os.makedirs(CFG_DIR, exist_ok=True)
+        path = os.path.join(CFG_DIR, 'cookie_cursor.cur')
+        if not os.path.isfile(path):
+            im = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+            d = ImageDraw.Draw(im)
+            d.ellipse((3, 3, 28, 28), fill=(151, 88, 42, 255), outline=(91, 48, 24, 255), width=2)
+            d.ellipse((6, 5, 25, 25), fill=(211, 157, 91, 255))
+            for x, y, r in ((11, 10, 2), (19, 9, 2), (15, 17, 2), (22, 19, 2), (9, 21, 1)):
+                d.ellipse((x-r, y-r, x+r, y+r), fill=(73, 39, 25, 255))
+            d.ellipse((7, 6, 12, 9), fill=(255, 225, 175, 180))
+            bio = io.BytesIO()
+            im.save(bio, format='ICO', sizes=[(32, 32)])
+            data = bytearray(bio.getvalue())
+            data[2:4] = (2).to_bytes(2, 'little')
+            data[6:8] = (4).to_bytes(2, 'little')
+            data[8:10] = (4).to_bytes(2, 'little')
+            with open(path, 'wb') as f:
+                f.write(data)
+        user32 = ctypes.windll.user32
+        handle = user32.LoadImageW(None, path, 2, 0, 0, 0x0010)
+        if handle:
+            user32.SetSystemCursor(handle, 32512)
+    except Exception:
+        pass
+
+
+def restore_system_cursor():
+    if IS_WIN:
+        try:
+            import ctypes
+            ctypes.windll.user32.SystemParametersInfoW(0x0057, 0, None, 0)
+        except Exception:
+            pass
+
+
+def make_ui_chime():
+    import wave, struct
+    os.makedirs(CFG_DIR, exist_ok=True)
+    path = os.path.join(CFG_DIR, 'ui_chime.wav')
+    if not os.path.isfile(path):
+        rate, duration = 22050, 0.16
+        with wave.open(path, 'wb') as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(rate)
+            frames = bytearray()
+            for i in range(int(rate * duration)):
+                t = i / rate
+                env = max(0.0, 1.0 - t / duration) ** 2
+                freq = 880 if t < 0.075 else 1174.66
+                sample = int(5000 * env * math.sin(2 * math.pi * freq * t))
+                frames.extend(struct.pack('<h', sample))
+            out.writeframes(frames)
+    return path
+
+
 class Music:
     """Looping background music through Windows' built-in MCI (plays mp3, no packages)."""
 
@@ -243,6 +305,8 @@ class App:
         self.wp_on = False
         self.last_hover = 0
         self.music = Music(res("holiday_ambiance.mp3"))
+        self.ui_chime = make_ui_chime()
+        make_cookie_cursor()
         self.start_saved_video()
         self.build_sparks()
         self.build_ground()
@@ -861,7 +925,20 @@ class App:
         for ch in w.winfo_children():
             if isinstance(ch, (ttk.Button, ttk.Checkbutton)):
                 ch.bind("<Enter>", self.hover, add="+")
+                ch.bind("<ButtonRelease-1>", self.click_sound, add="+")
             self.bind_hover(ch)
+
+    def click_sound(self, _event=None):
+        if not self.paused and not self.system_paused and IS_WIN:
+            try:
+                import winsound
+                winsound.PlaySound(self.ui_chime, winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+            except Exception:
+                pass
+
+    def set_music_enabled(self, enabled):
+        self.V["music"].set(bool(enabled))
+        self.apply()
 
     def hover(self, _=None):
         now = time.time()
@@ -915,7 +992,12 @@ class App:
         ttk.Button(video_buttons, text="Stop video", command=self.stop_video).pack(side="left")
         row[0] += 1
         check("Restore my wallpaper on exit", "restore_wp")
-        check("Music", "music")
+        check("Background music", "music")
+        music_buttons = ttk.Frame(f)
+        music_buttons.grid(row=row[0], columnspan=2, sticky="w", pady=(0, 5))
+        ttk.Button(music_buttons, text="Play music", command=lambda: self.set_music_enabled(True)).pack(side="left", padx=(0, 5))
+        ttk.Button(music_buttons, text="Stop music", command=lambda: self.set_music_enabled(False)).pack(side="left")
+        row[0] += 1
         scale("Volume", "volume", 0, 100)
         check("Sparkle on tree & fireplace", "sparkle")
         check("Snow", "snow")
@@ -977,6 +1059,7 @@ class App:
             self.video_player.stop()
             self.video_player = None
         self.music.close()
+        restore_system_cursor()
         save_cfg(self.cfg)
         if self.tray:
             try:
