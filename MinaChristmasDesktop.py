@@ -26,7 +26,7 @@ DEFAULTS = dict(snow=True, amount=150, speed=5.0, wind=0.0, var_wind=True,
                 show_message=False, message="Merry Christmas", autostart=False,
                 wallpaper=True, restore_wp=True, music=True, volume=60.0,
                 sparkle=True, tractor=True, pile=True, orig_wp="", custom_wp="", video_path="")
-UI_KEYS = [k for k in DEFAULTS if k not in ("orig_wp", "custom_wp")]
+UI_KEYS = [k for k in DEFAULTS if k not in ("orig_wp", "custom_wp", "video_path")]
 SPARK = ["#fff6c9", "#ffd54a", "#ffab40", "#ffffff"]
 EMBER = ["#ff9d2e", "#ffd54a", "#ff7043"]
 BULBS = ["#ff4d4d", "#ffd54a", "#4dd2ff", "#7dff7d", "#ff8ad8"]
@@ -99,7 +99,8 @@ def cursor_pos():
 
 def work_bottom(default):
     """Y where the taskbar starts (bottom of the usable desktop area)."""
-    if not IS_WIN:        return default
+    if not IS_WIN:
+        return default
     try:
         import ctypes
         from ctypes import wintypes
@@ -198,7 +199,8 @@ def set_wallpaper(path):
 class App:
     def __init__(self):
         if IS_WIN:
-            import ctypes            try:
+            import ctypes
+            try:
                 ctypes.windll.shcore.SetProcessDpiAwareness(2)
             except Exception:
                 try:
@@ -302,6 +304,7 @@ class App:
             self.flakes.append([x, y, r, 0.6 + r * 0.45, random.uniform(0, 6.28), item])
         while len(self.flakes) > want:
             self.c.delete(self.flakes.pop()[5])
+
     # ---------- santa ----------
     def draw_santa(self, x, y, s):
         c = self.c
@@ -401,7 +404,8 @@ class App:
         self.ground = work_bottom(H - 48)       # top edge of the taskbar
         self.bw = 8
         self.nb = W // self.bw + 2
-        self.snow_h = [0.0] * self.nb        self.puffs = []
+        self.snow_h = [0.0] * self.nb
+        self.puffs = []
         self.pile = c.create_polygon(0, 0, 0, 0, 0, 0, fill="#f4fbff", outline="", smooth=True, tags="pile")
         self.tr = dict(x=W * 0.25, s=1, drag=False, off=0, by=0)
         self.draw_tractor()
@@ -500,7 +504,8 @@ class App:
                     self.turn(1)
                 self.move_tractor(nx)
             by = round(1.2 * math.sin(n / 3))
-            if by != t["by"]:                c.move("tractor", 0, by - t["by"])
+            if by != t["by"]:
+                c.move("tractor", 0, by - t["by"])
                 t["by"] = by
             fx = t["x"] + t["s"] * 80 * k  # the plow clears the snow in front of it
             removed = 0.0
@@ -657,7 +662,8 @@ class App:
         try:
             if on:
                 os.makedirs(CFG_DIR, exist_ok=True)
-                custom = self.cfg.get("custom_wp", "")                if custom and os.path.isfile(custom):
+                custom = self.cfg.get("custom_wp", "")
+                if custom and os.path.isfile(custom):
                     dst = custom
                 else:
                     dst = os.path.join(CFG_DIR, "christmas_bg.jpg")
@@ -756,7 +762,8 @@ class App:
                             self.root.after(0, self.set_system_paused, False)
                     elif msg == WM_POWERBROADCAST:
                         if wparam == PBT_APMSUSPEND:
-                            self.root.after(0, self.set_system_paused, True)                        elif wparam in (PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND):
+                            self.root.after(0, self.set_system_paused, True)
+                        elif wparam in (PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND):
                             self.root.after(1000, self.set_system_paused, False)
                 except Exception:
                     pass
@@ -855,6 +862,7 @@ class App:
             if isinstance(ch, (ttk.Button, ttk.Checkbutton)):
                 ch.bind("<Enter>", self.hover, add="+")
             self.bind_hover(ch)
+
     def hover(self, _=None):
         now = time.time()
         if IS_WIN and now - self.last_hover > 0.12:
@@ -959,6 +967,7 @@ class App:
         if first or self.cfg["autostart"] != old_auto:
             set_autostart(self.cfg["autostart"])
         save_cfg(self.cfg)
+
     def quit(self):
         if self.wp_on and self.cfg["restore_wp"]:
             self.set_wp(False)
