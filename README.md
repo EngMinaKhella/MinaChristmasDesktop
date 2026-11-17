@@ -39,6 +39,8 @@ The workflow builds the Windows x64 EXE and attaches it to the GitHub Release fo
 
 ## Desktop, lock screen, and system tray
 
+- A cookie-shaped Windows pointer is applied while the app runs; Windows' default cursor scheme is restored on exit.
+- Settings controls play a short, original two-note chime. The bundled hover sound remains enabled, and background music has separate **Play music** / **Stop music** controls plus a volume slider.
 - The tray icon is the app's control point; the animated layer is shown on the signed-in Windows desktop, not as a lock-screen application.
 - Windows lock/sign-in screens use a separate protected desktop. A normal desktop application cannot draw over that secure screen.
 - Closing the settings window hides it; it does not exit the app. Use **Exit** from the tray menu to close the app.
