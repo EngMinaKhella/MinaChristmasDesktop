@@ -1,0 +1,42 @@
+# ابدأ من هنا — Mina Christmas Desktop
+
+## ماذا تغيّر؟
+
+- أصبح للبرنامج رمز في منطقة الإشعارات بجانب الساعة والواي فاي والصوت.
+- إغلاق نافذة الإعدادات يخفيها فقط؛ البرنامج يظل يعمل من رمز الصينية.
+- قائمة الرمز تتيح فتح الإعدادات وإيقاف/استئناف التأثيرات والخروج.
+- يتوقف الصوت والحركة عند قفل Windows أو دخول الجهاز في وضع السكون، ثم يعودان بعد فتح الجلسة/إيقاظ الجهاز.
+- أضيف اختيار صورة خلفية من الجهاز، مع خيار العودة للخلفية المرفقة.
+- زاد تحجيم عناصر شريط المهام ليتناسب مع الشاشات عالية الدقة، وأضيف رمز EXE.
+- أضيف بناء تلقائي لنسخة Windows عبر GitHub Actions.
+
+## رفعه على GitHub
+
+1. من GitHub اضغط **New repository**.
+2. اكتب الاسم `MinaChristmasDesktop`، واجعل المستودع **Public**، ولا تضف README أو `.gitignore` جديدين لأنهما موجودان في المشروع.
+3. بعد إنشاء المستودع، افتح PowerShell داخل مجلد المشروع الذي يحتوي `MinaChristmasDesktop.py` واكتب الأوامر التالية بعد استبدال `YOUR_USERNAME` باسم حسابك:
+
+```powershell
+git init
+git add .
+git commit -m "Prepare Mina Christmas Desktop for release"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/MinaChristmasDesktop.git
+git push -u origin main
+```
+
+4. في صفحة المستودع افتح **Actions** ثم **Build Windows EXE** ثم **Run workflow**. بعد انتهاء البناء نزّل `MinaChristmasDesktop.exe` من قسم **Artifacts**.
+5. لنشر ملف تنزيل دائم: أنشئ Tag باسم `v1.0.0` وادفعه، وسيضيف الـ workflow الملف تلقائيًا إلى صفحة **Releases**:
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+## تنبيه قبل جعله عامًا
+
+راجع حقوق صورة الخلفية وملف الموسيقى وصوت الأزرار المرفقة؛ لا تنشرها أو تضعها داخل ملف EXE للتوزيع العام إلا إذا كنت تملكها أو لديك إذن بإعادة توزيعها.
+
+## الموبايل
+
+ملف `.exe` يعمل على Windows PC فقط. لن يعمل على Android أو iPhone؛ لذلك يلزم تطوير إصدار موبايل منفصل إذا أردت نشره على الهواتف.
