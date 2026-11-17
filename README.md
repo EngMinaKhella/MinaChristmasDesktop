@@ -45,7 +45,7 @@ The workflow builds the Windows x64 EXE and attaches it to the GitHub Release fo
 
 ## Background image and 4K displays
 
-- Use **Choose image…** in settings to select a JPG, JPEG, PNG, or BMP image as your Windows wallpaper. The app keeps a copy in `%APPDATA%\MinaChristmasDesktop` so the selected file remains available.
+- Use **Choose image…** in settings to select a JPG, JPEG, PNG, or BMP image as your Windows wallpaper. Use **Choose video…** to add a looping MP4/MOV/MKV/WebM video layer. The app decodes video locally using its bundled FFmpeg runtime. H.264 MP4 at 720p and 15 fps is recommended for modest PCs. Use **Stop video** to return to the normal wallpaper. The app keeps a copy in `%APPDATA%\MinaChristmasDesktop` so the selected file remains available.
 - **Use built-in** selects the bundled background again.
 - The overlay adapts to the current display dimensions and DPI. A 4K monitor is supported, but true crisp 4K wallpaper quality depends on using an original 3840×2160 image. The bundled image is lower resolution and may look soft when enlarged.
 
