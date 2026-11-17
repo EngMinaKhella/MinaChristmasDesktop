@@ -6,7 +6,7 @@ python -m pip install --upgrade pip
 if errorlevel 1 goto fail
 python -m pip install -r requirements.txt pyinstaller
 if errorlevel 1 goto fail
-python -m PyInstaller --noconfirm --clean --onefile --windowed --collect-all pystray --collect-all PIL --icon "assets\app_icon.ico" --add-data "assets;assets" --name MinaChristmasDesktop MinaChristmasDesktop.py
+python -m PyInstaller --noconfirm --clean --onefile --windowed --collect-all pystray --collect-all PIL --collect-all imageio_ffmpeg --icon "assets\app_icon.ico" --add-data "assets;assets" --name MinaChristmasDesktop MinaChristmasDesktop.py
 if errorlevel 1 goto fail
 echo.
 echo Build complete: %~dp0dist\MinaChristmasDesktop.exe

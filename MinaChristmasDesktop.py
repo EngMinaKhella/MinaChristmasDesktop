@@ -13,6 +13,8 @@ import threading
 import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from PIL import Image, ImageTk
+from video_background import LoopingVideo
 
 APP = "MinaChristmasDesktop"
 KEY = "#010101"  # this exact colour becomes see-through
@@ -23,8 +25,8 @@ DEFAULTS = dict(snow=True, amount=150, speed=5.0, wind=0.0, var_wind=True,
                 lights=False, santa=True, santa_every=8.0,
                 show_message=False, message="Merry Christmas", autostart=False,
                 wallpaper=True, restore_wp=True, music=True, volume=60.0,
-                sparkle=True, tractor=True, pile=True, orig_wp="", custom_wp="")
-UI_KEYS = [k for k in DEFAULTS if k not in ("orig_wp", "custom_wp")]
+                sparkle=True, tractor=True, pile=True, orig_wp="", custom_wp="", video_path="")
+UI_KEYS = [k for k in DEFAULTS if k not in ("orig_wp", "custom_wp", "video_path")]
 SPARK = ["#fff6c9", "#ffd54a", "#ffab40", "#ffffff"]
 EMBER = ["#ff9d2e", "#ffd54a", "#ff7043"]
 BULBS = ["#ff4d4d", "#ffd54a", "#4dd2ff", "#7dff7d", "#ff8ad8"]
@@ -139,6 +141,72 @@ def res(name):
     return os.path.join(base, "assets", name)
 
 
+def make_cookie_cursor():
+    if not IS_WIN:
+        return
+    try:
+        from PIL import Image, ImageDraw
+        import ctypes, io
+        os.makedirs(CFG_DIR, exist_ok=True)
+        path = os.path.join(CFG_DIR, 'cookie_cursor.cur')
+        if not os.path.isfile(path):
+            im = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+            d = ImageDraw.Draw(im)
+            d.ellipse((3, 3, 28, 28), fill=(151, 88, 42, 255), outline=(91, 48, 24, 255), width=2)
+            d.ellipse((6, 5, 25, 25), fill=(211, 157, 91, 255))
+            for x, y, r in ((11, 10, 2), (19, 9, 2), (15, 17, 2), (22, 19, 2), (9, 21, 1)):
+                d.ellipse((x-r, y-r, x+r, y+r), fill=(73, 39, 25, 255))
+            d.ellipse((7, 6, 12, 9), fill=(255, 225, 175, 180))
+            bio = io.BytesIO()
+            im.save(bio, format='ICO', sizes=[(32, 32)])
+            data = bytearray(bio.getvalue())
+            data[2:4] = (2).to_bytes(2, 'little')
+            data[6:8] = (4).to_bytes(2, 'little')
+            data[8:10] = (4).to_bytes(2, 'little')
+            with open(path, 'wb') as f:
+                f.write(data)
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        user32.LoadImageW.restype = wintypes.HANDLE
+        user32.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        user32.SetSystemCursor.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        handle = user32.LoadImageW(None, path, 2, 0, 0, 0x0010)
+        if handle:
+            user32.SetSystemCursor(handle, 32512)
+    except Exception:
+        pass
+
+
+def restore_system_cursor():
+    if IS_WIN:
+        try:
+            import ctypes
+            ctypes.windll.user32.SystemParametersInfoW(0x0057, 0, None, 0)
+        except Exception:
+            pass
+
+
+def make_ui_chime():
+    import wave, struct
+    os.makedirs(CFG_DIR, exist_ok=True)
+    path = os.path.join(CFG_DIR, 'ui_chime.wav')
+    if not os.path.isfile(path):
+        rate, duration = 22050, 0.16
+        with wave.open(path, 'wb') as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(rate)
+            frames = bytearray()
+            for i in range(int(rate * duration)):
+                t = i / rate
+                env = max(0.0, 1.0 - t / duration) ** 2
+                freq = 880 if t < 0.075 else 1174.66
+                sample = int(5000 * env * math.sin(2 * math.pi * freq * t))
+                frames.extend(struct.pack('<h', sample))
+            out.writeframes(frames)
+    return path
+
+
 class Music:
     """Looping background music through Windows' built-in MCI (plays mp3, no packages)."""
 
@@ -225,6 +293,9 @@ class App:
             pass
         self.c = tk.Canvas(r, width=self.W, height=self.H, bg=KEY, highlightthickness=0)
         self.c.pack()
+        self.video_item = self.c.create_image(0, 0, anchor="nw", tags="video_bg")
+        self.video_player = None
+        self.video_photo = None
         r.update()
         self.hwnd = make_click_through(r)
         self.ct = True
@@ -238,6 +309,9 @@ class App:
         self.wp_on = False
         self.last_hover = 0
         self.music = Music(res("holiday_ambiance.mp3"))
+        self.ui_chime = make_ui_chime()
+        make_cookie_cursor()
+        self.start_saved_video()
         self.build_sparks()
         self.build_ground()
         self.build_lights()
@@ -246,6 +320,7 @@ class App:
         self.apply(first=True)
         self.start_tray()
         self.tick()
+        self.update_video_frame()
         self.blink_lights()
 
     # ---------- decorations ----------
@@ -590,6 +665,64 @@ class App:
             r = 0.55 * s
             c.coords(ws[0], X - r, Y - r, X + r, Y + r)
 
+    def start_saved_video(self):
+        path = self.cfg.get("video_path", "")
+        if path and os.path.isfile(path):
+            try:
+                self.video_player = LoopingVideo(path, width=self.W, height=self.H)
+            except Exception:
+                self.video_player = None
+
+    def update_video_frame(self):
+        player = self.video_player
+        if player:
+            frame = player.get_frame()
+            if frame is not None:
+                try:
+                    frame = frame.resize((self.W, self.H), Image.Resampling.LANCZOS)
+                    self.video_photo = ImageTk.PhotoImage(frame)
+                    self.c.itemconfigure(self.video_item, image=self.video_photo)
+                except Exception:
+                    pass
+            error = player.get_error()
+            if error:
+                self.stop_video(show_message=False)
+                try:
+                    messagebox.showwarning(APP, f"Video playback stopped: {error}")
+                except Exception:
+                    pass
+        self.root.after(66, self.update_video_frame)
+
+    def choose_video(self):
+        path = filedialog.askopenfilename(title="Choose a looping desktop video",
+            filetypes=[("Video files", "*.mp4 *.m4v *.mov *.mkv *.webm"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            os.makedirs(CFG_DIR, exist_ok=True)
+            ext = os.path.splitext(path)[1].lower() or ".mp4"
+            target = os.path.join(CFG_DIR, "christmas_video" + ext)
+            if os.path.normcase(os.path.abspath(path)) != os.path.normcase(os.path.abspath(target)):
+                shutil.copy2(path, target)
+            self.stop_video(show_message=False, save=False)
+            self.cfg["video_path"] = target
+            self.video_player = LoopingVideo(target, width=self.W, height=self.H)
+            save_cfg(self.cfg)
+        except Exception as exc:
+            messagebox.showerror(APP, f"Could not start this video:\n{exc}")
+
+    def stop_video(self, show_message=True, save=True):
+        if self.video_player:
+            self.video_player.stop()
+            self.video_player = None
+        self.video_photo = None
+        self.c.itemconfigure(self.video_item, image="")
+        if save:
+            self.cfg["video_path"] = ""
+            save_cfg(self.cfg)
+        if show_message:
+            messagebox.showinfo(APP, "Video background stopped.")
+
     def set_wp(self, on, force=False):
         """Apply the selected wallpaper while remembering the user's original one."""
         if not IS_WIN or (on == self.wp_on and not force):
@@ -796,7 +929,20 @@ class App:
         for ch in w.winfo_children():
             if isinstance(ch, (ttk.Button, ttk.Checkbutton)):
                 ch.bind("<Enter>", self.hover, add="+")
+                ch.bind("<ButtonRelease-1>", self.click_sound, add="+")
             self.bind_hover(ch)
+
+    def click_sound(self, _event=None):
+        if not self.paused and not self.system_paused and IS_WIN:
+            try:
+                import winsound
+                winsound.PlaySound(self.ui_chime, winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+            except Exception:
+                pass
+
+    def set_music_enabled(self, enabled):
+        self.V["music"].set(bool(enabled))
+        self.apply()
 
     def hover(self, _=None):
         now = time.time()
@@ -844,8 +990,18 @@ class App:
         ttk.Button(wallpaper_buttons, text="Choose image…", command=self.choose_wallpaper).pack(side="left", padx=(0, 5))
         ttk.Button(wallpaper_buttons, text="Use built-in", command=self.use_default_wallpaper).pack(side="left")
         row[0] += 1
+        video_buttons = ttk.Frame(f)
+        video_buttons.grid(row=row[0], columnspan=2, sticky="w", pady=(0, 6))
+        ttk.Button(video_buttons, text="Choose video…", command=self.choose_video).pack(side="left", padx=(0, 5))
+        ttk.Button(video_buttons, text="Stop video", command=self.stop_video).pack(side="left")
+        row[0] += 1
         check("Restore my wallpaper on exit", "restore_wp")
-        check("Music", "music")
+        check("Background music", "music")
+        music_buttons = ttk.Frame(f)
+        music_buttons.grid(row=row[0], columnspan=2, sticky="w", pady=(0, 5))
+        ttk.Button(music_buttons, text="Play music", command=lambda: self.set_music_enabled(True)).pack(side="left", padx=(0, 5))
+        ttk.Button(music_buttons, text="Stop music", command=lambda: self.set_music_enabled(False)).pack(side="left")
+        row[0] += 1
         scale("Volume", "volume", 0, 100)
         check("Sparkle on tree & fireplace", "sparkle")
         check("Snow", "snow")
@@ -903,7 +1059,11 @@ class App:
             self.set_wp(False)
         # Original wallpaper is per run; next launch captures the current Windows wallpaper.
         self.cfg["orig_wp"] = ""
+        if self.video_player:
+            self.video_player.stop()
+            self.video_player = None
         self.music.close()
+        restore_system_cursor()
         save_cfg(self.cfg)
         if self.tray:
             try:

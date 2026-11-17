@@ -6,6 +6,8 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
@@ -30,7 +32,7 @@ jobs:
       - name: Build standalone EXE
         run: >-
           pyinstaller --noconfirm --clean --onefile --windowed
-          --collect-all pystray --collect-all PIL --icon "assets/app_icon.ico"
+          --collect-all pystray --collect-all PIL --collect-all imageio_ffmpeg --icon "assets/app_icon.ico"
           --add-data "assets;assets"
           --name MinaChristmasDesktop MinaChristmasDesktop.py
 
