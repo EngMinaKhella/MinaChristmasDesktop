@@ -325,6 +325,10 @@ class App:
                     else:
                         self.root.attributes("-topmost", False)
                         self.root.lower()
+                if self.wallpaper_motion is not None:
+                    self.wallpaper_motion.set_paused(
+                        not self._desktop_layer_active or self.paused or self.system_paused
+                    )
             except Exception:
                 # If Windows window detection fails, leave the visual overlay usable.
                 pass
@@ -829,6 +833,9 @@ class App:
                 self.wallpaper_motion = AnimatedWallpaper(
                     self.root, scene, self.W, self.H
                 )
+                self.wallpaper_motion.set_paused(
+                    self.paused or self.system_paused or not self._desktop_layer_active
+                )
             except Exception as exc:
                 self.wallpaper_motion = None
                 try:
@@ -944,6 +951,10 @@ class App:
         self.system_paused = bool(value)
         self.music.set(self.cfg.get("music", False) and not self.paused and not self.system_paused,
                        self.cfg.get("volume", 60))
+        if self.wallpaper_motion is not None:
+            self.wallpaper_motion.set_paused(
+                self.paused or self.system_paused or not self._desktop_layer_active
+            )
         if self.tray:
             suffix = " — Paused" if (self.paused or self.system_paused) else ""
             self.tray.title = f"Mina Christmas Desktop v{APP_VERSION}" + suffix
@@ -1011,6 +1022,10 @@ class App:
         self.paused = not self.paused
         self.music.set(self.cfg.get("music", False) and not self.paused and not self.system_paused,
                        self.cfg.get("volume", 60))
+        if self.wallpaper_motion is not None:
+            self.wallpaper_motion.set_paused(
+                self.paused or self.system_paused or not self._desktop_layer_active
+            )
         if self.tray:
             suffix = " — Paused" if (self.paused or self.system_paused) else ""
             self.tray.title = f"Mina Christmas Desktop v{APP_VERSION}" + suffix
