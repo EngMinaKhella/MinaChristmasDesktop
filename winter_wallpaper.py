@@ -390,6 +390,21 @@ class AnimatedWallpaper:
             r = 2 if self.width < 1500 else 3
             draw.ellipse((x-r, y-r, x+r, y+r), fill=(255, 218, 110, alpha))
 
+        # A few soft chimney wisps drift upward and fade naturally.
+        smoke_x = int(self.width * 0.84)
+        smoke_y = int(self.height * 0.18)
+        for i in range(4):
+            phase = t * 0.55 + i * 1.35
+            drift = int(7 * math.sin(phase))
+            rise = int((t * 7 + i * 14) % max(40, int(self.height * 0.09)))
+            radius = max(4, int(self.width * (0.004 + i * 0.001)))
+            alpha = max(8, 34 - i * 6)
+            draw.ellipse(
+                (smoke_x + drift - radius, smoke_y - rise - radius,
+                 smoke_x + drift + radius, smoke_y - rise + radius),
+                fill=(215, 226, 238, alpha),
+            )
+
         return image.convert("RGB")
 
     def set_paused(self, paused):
