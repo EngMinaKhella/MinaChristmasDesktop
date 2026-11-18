@@ -949,6 +949,7 @@ class App:
 
     def set_system_paused(self, value):
         self.system_paused = bool(value)
+        self.sync_wallpaper_pause()
         self.music.set(self.cfg.get("music", False) and not self.paused and not self.system_paused,
                        self.cfg.get("volume", 60))
         if self.wallpaper_motion is not None:
@@ -1002,6 +1003,10 @@ class App:
     def _tray_quit(self, icon=None, item=None):
         self.root.after(0, self.quit)
 
+    def sync_wallpaper_pause(self):
+        if self.wallpaper_motion is not None:
+            self.wallpaper_motion.set_paused(self.paused or self.system_paused)
+
     def show_panel(self):
         self.panel.deiconify()
         self.panel.lift()
@@ -1020,6 +1025,7 @@ class App:
 
     def toggle_pause(self):
         self.paused = not self.paused
+        self.sync_wallpaper_pause()
         self.music.set(self.cfg.get("music", False) and not self.paused and not self.system_paused,
                        self.cfg.get("volume", 60))
         if self.wallpaper_motion is not None:
@@ -1353,6 +1359,7 @@ class App:
             self._start_input_hooks()
         self.set_wp(self.cfg["wallpaper"])
         self.sync_animated_wallpaper()
+        self.sync_wallpaper_pause()
         show_scene_sparkles = self.cfg["sparkle"] and not self.has_custom_wallpaper()
         self.c.itemconfigure("spark", state="normal" if show_scene_sparkles else "hidden")
         self.c.itemconfigure("tractor", state="normal" if self.cfg["tractor"] else "hidden")
