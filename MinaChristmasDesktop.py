@@ -16,6 +16,8 @@ import wave
 import struct
 from tkinter import ttk, filedialog, messagebox
 
+from winter_wallpaper import AnimatedWallpaper, bundled_scene_path
+
 APP = "MinaChristmasDesktop"
 APP_VERSION = "1.1.0"
 KEY = "#010101"  # this exact colour becomes see-through
@@ -28,6 +30,7 @@ DEFAULTS = dict(snow=True, amount=150, speed=5.0, wind=0.0, var_wind=True,
                 wallpaper=True, restore_wp=True, music=True, volume=60.0,
                 sparkle=True, tractor=True, pile=True, orig_wp="", custom_wp="",
                 sound_click=True, sound_delete=True, sound_typing=True, edge_snow=True,
+                snowman=True, animated_scene=True,
                 click_volume=28.0, delete_volume=34.0, typing_volume=20.0)
 UI_KEYS = [k for k in DEFAULTS if k not in ("orig_wp", "custom_wp")]
 SPARK = ["#fff6c9", "#ffd54a", "#ffab40", "#ffffff"]
@@ -229,6 +232,8 @@ class App:
         self._hook_callbacks = None
         self._hook_handles = []
         self._desktop_layer_active = True
+        self.wallpaper_motion = None
+        self.snowman_state = None
         self.root = r = tk.Tk()
         r.title(APP)
         r.overrideredirect(True)
@@ -258,6 +263,7 @@ class App:
         self.build_sparks()
         self.build_ground()
         self.build_snow_edges()
+        self.build_snowman()
         self.build_lights()
         self.build_message()
         self.build_panel()
@@ -301,7 +307,7 @@ class App:
                 hwnd = user32.GetForegroundWindow()
                 class_name = ctypes.create_unicode_buffer(128)
                 user32.GetClassNameW(hwnd, class_name, len(class_name))
-                shell_classes = {"Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"}
+                shell_classes = {"Progman", "WorkerW", "SHELLDLL_DefView", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"}
                 panel_open = False
                 try:
                     panel_open = self.panel.state() != "withdrawn"
@@ -450,6 +456,92 @@ class App:
             self.santa = None
             self.santa_at = time.time() + self.cfg["santa_every"] * 60 * random.uniform(0.7, 1.3)
 
+    # ---------- interactive desktop snowman ----------
+    def build_snowman(self):
+        self.snowman_state = {
+            "x": self.W * 0.17, "base_x": self.W * 0.17,
+            "direction": 1, "phase": 0.0, "wave_until": 0.0,
+        }
+        self.draw_snowman()
+        self.c.tag_bind("snowman", "<Button-1>", self.snowman_wave)
+        self.c.tag_bind("snowman", "<Enter>", lambda _e: self.c.configure(cursor="hand2"))
+        self.c.tag_bind("snowman", "<Leave>", lambda _e: self.c.configure(cursor=""))
+
+    def draw_snowman(self):
+        c, state, k = self.c, self.snowman_state, self.k
+        if not state:
+            return
+        c.delete("snowman")
+        x = state["x"]
+        base = self.ground - 3 * k
+
+        def oval(x1, y1, x2, y2, **kw):
+            c.create_oval(x + x1*k, base + y1*k, x + x2*k, base + y2*k,
+                          tags=("snowman",), **kw)
+
+        def line(*coords, **kw):
+            pts = []
+            for px, py in coords:
+                pts.extend((x + px*k, base + py*k))
+            c.create_line(*pts, tags=("snowman", "snowman_arm"), **kw)
+
+        oval(-22, -42, 22, 2, fill="#eaf6ff", outline="#b8d4e8", width=2)
+        oval(-16, -72, 16, -40, fill="#f7fcff", outline="#c7dfef", width=2)
+        oval(-11, -94, 11, -70, fill="#ffffff", outline="#c7dfef", width=2)
+        oval(-5, -87, -2, -84, fill="#263238", outline="")
+        oval(3, -87, 6, -84, fill="#263238", outline="")
+        c.create_polygon(x, base-82*k, x+13*k, base-79*k, x, base-76*k,
+                         fill="#ff9d32", outline="#d66b1c", tags="snowman")
+        oval(-4, -65, 4, -61, fill="#263238", outline="")
+        oval(-4, -55, 4, -51, fill="#263238", outline="")
+        oval(-4, -45, 4, -41, fill="#263238", outline="")
+        c.create_rectangle(x-12*k, base-73*k, x+12*k, base-68*k,
+                           fill="#c62828", outline="", tags="snowman")
+        c.create_polygon(x-11*k, base-73*k, x+11*k, base-73*k,
+                         x+7*k, base-66*k, x-8*k, base-67*k,
+                         fill="#e53935", outline="", tags="snowman")
+        c.create_rectangle(x-11*k, base-98*k, x+11*k, base-94*k,
+                           fill="#b71c1c", outline="", tags="snowman")
+        c.create_polygon(x-9*k, base-98*k, x+7*k, base-98*k,
+                         x+3*k, base-111*k, x-5*k, base-107*k,
+                         fill="#d32f2f", outline="", tags="snowman")
+        oval(-7, -114, -1, -108, fill="#ffffff", outline="")
+
+        line((-17, -63), (-30, -71), (-38, -68),
+             fill="#8d5a36", width=max(2, int(2*k)))
+        if time.monotonic() < state["wave_until"]:
+            wave = math.sin(state["phase"] * 2.4) * 8
+            line((17, -63), (29, -73 + wave), (38, -84 + wave),
+                 fill="#8d5a36", width=max(2, int(2*k)))
+        else:
+            line((17, -63), (30, -71), (38, -68),
+                 fill="#8d5a36", width=max(2, int(2*k)))
+
+    def snowman_wave(self, _event=None):
+        if self.snowman_state:
+            self.snowman_state["wave_until"] = time.monotonic() + 4.0
+            self.draw_snowman()
+
+    def update_snowman(self):
+        state = self.snowman_state
+        if not state:
+            return
+        enabled = bool(self.cfg.get("snowman", True))
+        self.c.itemconfigure("snowman", state="normal" if enabled else "hidden")
+        if not enabled:
+            return
+        state["phase"] += 0.08
+        left, right = self.W * 0.10, self.W * 0.25
+        step = 0.28 * self.k * state["direction"]
+        nx = state["x"] + step
+        if nx < left or nx > right:
+            state["direction"] *= -1
+            nx = state["x"] + 0.28 * self.k * state["direction"]
+        self.c.move("snowman", nx - state["x"], 0)
+        state["x"] = nx
+        if int(state["phase"] * 10) % 10 == 0:
+            self.draw_snowman()
+
     # ---------- main loop ----------
     def tick(self):
         if self.paused or self.system_paused:
@@ -478,6 +570,7 @@ class App:
         self.n += 1
         self.update_sparks()
         self.update_snow_edges()
+        self.update_snowman()
         self.update_ground()
         if self.n % 150 == 0:
             self.music.keepalive()
@@ -573,12 +666,17 @@ class App:
     def update_ground(self):
         c, t, k, n = self.c, self.tr, self.k, self.n
         on = self.cfg["tractor"]
-        # the overlay only catches the mouse while it is over the tractor
+        # Catch pointer input only over the tractor or interactive snowman.
         want = True
-        if on and IS_WIN:
+        if IS_WIN:
             mx, my = cursor_pos()
-            bb = c.bbox("tractor")
-            if t["drag"] or (bb and bb[0] <= mx <= bb[2] and bb[1] <= my <= bb[3]):
+            tractor_box = c.bbox("tractor") if on else None
+            snowman_box = c.bbox("snowman") if self.cfg.get("snowman", True) else None
+            over_tractor = bool(tractor_box and tractor_box[0] <= mx <= tractor_box[2]
+                                and tractor_box[1] <= my <= tractor_box[3])
+            over_snowman = bool(snowman_box and snowman_box[0] <= mx <= snowman_box[2]
+                                and snowman_box[1] <= my <= snowman_box[3])
+            if t["drag"] or over_tractor or over_snowman:
                 want = False
         if IS_WIN and want != self.ct:
             set_ex_transparent(self.hwnd, want)
@@ -699,9 +797,7 @@ class App:
                 if custom and os.path.isfile(custom):
                     dst = custom
                 else:
-                    dst = os.path.join(CFG_DIR, "christmas_bg.jpg")
-                    if not os.path.isfile(dst):
-                        shutil.copyfile(res("christmas_bg.jpg"), dst)
+                    dst = bundled_scene_path(res, CFG_DIR)
                 cur = get_wallpaper()
                 # Snapshot the current wallpaper once per app run, even if it already matches the selected image.
                 if cur and not self.cfg.get("orig_wp"):
@@ -720,6 +816,30 @@ class App:
                     messagebox.showwarning(APP, f"Could not change the wallpaper:\n{exc}")
                 except Exception:
                     pass
+
+    def sync_animated_wallpaper(self):
+        should_run = bool(
+            IS_WIN and self.cfg.get("wallpaper", True)
+            and self.cfg.get("animated_scene", True)
+            and not self.has_custom_wallpaper()
+        )
+        if should_run and self.wallpaper_motion is None:
+            try:
+                scene = bundled_scene_path(res, CFG_DIR)
+                self.wallpaper_motion = AnimatedWallpaper(
+                    self.root, scene, self.W, self.H
+                )
+            except Exception as exc:
+                self.wallpaper_motion = None
+                try:
+                    print("Animated wallpaper unavailable:", exc)
+                except Exception:
+                    pass
+        elif not should_run and self.wallpaper_motion is not None:
+            try:
+                self.wallpaper_motion.stop()
+            finally:
+                self.wallpaper_motion = None
 
     def choose_wallpaper(self):
         """Copy a user-selected image into AppData so it remains available after packaging."""
@@ -1163,6 +1283,7 @@ class App:
         ttk.Button(wallpaper_buttons, text="Use built-in", command=self.use_default_wallpaper).pack(side="left")
         row[0] += 1
         check("Restore my wallpaper on exit", "restore_wp")
+        check("Animated cabin scene", "animated_scene")
         check("Music", "music")
         scale("Volume", "volume", 0, 100)
         ttk.Button(f, text="Desktop sound effects…", command=self.show_sound_panel).grid(
@@ -1171,6 +1292,7 @@ class App:
         check("Sparkle on tree & fireplace", "sparkle")
         check("Snow", "snow")
         check("Snow on screen edges", "edge_snow")
+        check("Interactive snowman", "snowman")
         check("Snow tractor on taskbar", "tractor")
         check("Snow piles on taskbar", "pile")
         scale("Amount", "amount", 10, 400)
@@ -1215,6 +1337,7 @@ class App:
         if first:
             self._start_input_hooks()
         self.set_wp(self.cfg["wallpaper"])
+        self.sync_animated_wallpaper()
         show_scene_sparkles = self.cfg["sparkle"] and not self.has_custom_wallpaper()
         self.c.itemconfigure("spark", state="normal" if show_scene_sparkles else "hidden")
         self.c.itemconfigure("tractor", state="normal" if self.cfg["tractor"] else "hidden")
@@ -1224,6 +1347,11 @@ class App:
         save_cfg(self.cfg)
 
     def quit(self):
+        if self.wallpaper_motion is not None:
+            try:
+                self.wallpaper_motion.stop()
+            finally:
+                self.wallpaper_motion = None
         if self.wp_on and self.cfg["restore_wp"]:
             self.set_wp(False)
         # Original wallpaper is per run; next launch captures the current Windows wallpaper.
