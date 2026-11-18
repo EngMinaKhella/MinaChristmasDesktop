@@ -797,6 +797,11 @@ class App:
             pass
 
     def hide_panel(self):
+        if self.sound_panel is not None:
+            try:
+                self.sound_panel.withdraw()
+            except tk.TclError:
+                pass
         self.panel.withdraw()
 
     def toggle_pause(self):
@@ -877,8 +882,11 @@ class App:
             try:
                 os.makedirs(CFG_DIR, exist_ok=True)
                 for kind, volume in zip(("click", "delete", "typing"), volumes):
-                    path = os.path.join(CFG_DIR, "desktop_" + kind + ".wav")
-                    self._write_input_sound(path, kind, volume)
+                    # A new file name avoids replacing a WAV that Windows is still playing.
+                    path = os.path.join(
+                        CFG_DIR, "desktop_" + kind + "_" + str(volume) + ".wav")
+                    if not os.path.isfile(path):
+                        self._write_input_sound(path, kind, volume)
                     self._sound_paths[kind] = path
                 self._sound_signature = volumes
             except Exception:
