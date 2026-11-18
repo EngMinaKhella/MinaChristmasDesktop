@@ -12,7 +12,9 @@
     clickSound: true,
     typingSound: true,
     deleteSound: true,
-    soundVolume: 0.22,
+    clickVolume: 0.22,
+    typingVolume: 0.16,
+    deleteVolume: 0.22,
     reducedMotion: false
   };
 
@@ -23,6 +25,7 @@
   let width = 0, height = 0, dpr = 1;
   let lastFrame = 0;
   let lastKeySound = 0;
+  let lastSnowmanWave = 0;
   let sleighTimer = 0;
   let isDisposed = false;
 
@@ -118,6 +121,8 @@
     frameId = requestAnimationFrame(animate);
     if (document.visibilityState !== "visible" || document.fullscreenElement) {
       ctx.clearRect(0, 0, width, height);
+      if (sleigh) sleigh.style.display = "none";
+      if (snowman) snowman.style.display = "none";
       lastFrame = time;
       return;
     }
@@ -164,7 +169,9 @@
   function playSound(kind) {
     const enabled = kind === "click" ? settings.clickSound :
                     kind === "typing" ? settings.typingSound : settings.deleteSound;
-    if (!enabled || settings.soundVolume <= 0) return;
+    const volumeKey = kind === "click" ? "clickVolume" : kind === "typing" ? "typingVolume" : "deleteVolume";
+    const volume = Number(settings[volumeKey] ?? 0.2);
+    if (!enabled || volume <= 0) return;
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
@@ -178,7 +185,7 @@
       oscillator.type = kind === "typing" ? "square" : "sine";
       oscillator.frequency.setValueAtTime(tones[0], now);
       if (tones.length > 1) oscillator.frequency.exponentialRampToValueAtTime(tones[1], now + .075);
-      gain.gain.setValueAtTime(Math.max(.0001, settings.soundVolume * .16), now);
+      gain.gain.setValueAtTime(Math.max(.0001, volume * .16), now);
       gain.gain.exponentialRampToValueAtTime(.0001, now + (kind === "delete" ? .10 : .045));
       oscillator.connect(gain);
       gain.connect(audioContext.destination);
@@ -212,7 +219,8 @@
     const rect = snowman.getBoundingClientRect();
     const near = event.clientX >= rect.left - 12 && event.clientX <= rect.right + 12 &&
                  event.clientY >= rect.top - 12 && event.clientY <= rect.bottom + 12;
-    if (near) {
+    if (near && performance.now() - lastSnowmanWave > 1500) {
+      lastSnowmanWave = performance.now();
       snowman.classList.remove("wave");
       void snowman.offsetWidth;
       snowman.classList.add("wave");
