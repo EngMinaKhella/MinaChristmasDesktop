@@ -12,6 +12,8 @@ import sys
 import threading
 import time
 import tkinter as tk
+import wave
+import struct
 from tkinter import ttk, filedialog, messagebox
 
 APP = "MinaChristmasDesktop"
@@ -23,7 +25,9 @@ DEFAULTS = dict(snow=True, amount=150, speed=5.0, wind=0.0, var_wind=True,
                 lights=False, santa=True, santa_every=8.0,
                 show_message=False, message="Merry Christmas", autostart=False,
                 wallpaper=True, restore_wp=True, music=True, volume=60.0,
-                sparkle=True, tractor=True, pile=True, orig_wp="", custom_wp="")
+                sparkle=True, tractor=True, pile=True, orig_wp="", custom_wp="",
+                sound_click=True, sound_delete=True, sound_typing=True,
+                click_volume=28.0, delete_volume=34.0, typing_volume=20.0)
 UI_KEYS = [k for k in DEFAULTS if k not in ("orig_wp", "custom_wp")]
 SPARK = ["#fff6c9", "#ffd54a", "#ffab40", "#ffffff"]
 EMBER = ["#ff9d2e", "#ffd54a", "#ff7043"]
@@ -212,6 +216,17 @@ class App:
         self._old_wndproc = None
         self.tray = None
         self.tray_thread = None
+        self.sound_panel = None
+        self._sound_paths = {}
+        self._sound_signature = None
+        self._sound_regen_job = None
+        self._last_input_sound = {}
+        self._input_sound_lock = threading.Lock()
+        self._hook_thread = None
+        self._hook_thread_id = 0
+        self._hook_started = False
+        self._hook_callbacks = None
+        self._hook_handles = []
         self.root = r = tk.Tk()
         r.title(APP)
         r.overrideredirect(True)
@@ -808,6 +823,218 @@ class App:
             except Exception:
                 pass
 
+    # ---------- global desktop sound effects ----------
+    def _write_input_sound(self, path, kind, volume):
+        """Create a tiny, original UI sound locally; no downloaded audio is needed."""
+        rate = 22050
+        duration = {"click": 0.050, "typing": 0.028, "delete": 0.092}[kind]
+        frames = []
+        amplitude = max(0.0, min(100.0, float(volume))) / 100.0 * 0.34
+        count = int(rate * duration)
+        for i in range(count):
+            t = i / rate
+            value = 0.0
+            if kind == "click":
+                env = math.exp(-t * 165.0)
+                value = (0.62 * math.sin(2 * math.pi * 185 * t) * env
+                         + 0.22 * random.uniform(-1.0, 1.0) * math.exp(-t * 300.0))
+            elif kind == "typing":
+                env = math.exp(-t * 245.0)
+                value = (0.70 * math.sin(2 * math.pi * 1450 * t) * env
+                         + 0.16 * random.uniform(-1.0, 1.0) * math.exp(-t * 360.0))
+            else:
+                for start, freq in ((0.0, 1050.0), (0.047, 720.0)):
+                    dt = t - start
+                    if dt >= 0:
+                        env = math.exp(-dt * 185.0)
+                        value += (0.48 * math.sin(2 * math.pi * freq * dt) * env
+                                  + 0.14 * random.uniform(-1.0, 1.0) * math.exp(-dt * 280.0))
+            sample = int(max(-1.0, min(1.0, value * amplitude)) * 32767)
+            frames.append(struct.pack("<h", sample))
+        temp_path = path + ".tmp"
+        with wave.open(temp_path, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(rate)
+            wav.writeframes(b"".join(frames))
+        os.replace(temp_path, path)
+
+    def _refresh_input_sounds(self, immediate=False):
+        volumes = tuple(int(max(0, min(100, float(self.cfg.get(k, 25)))))
+                        for k in ("click_volume", "delete_volume", "typing_volume"))
+        if volumes == self._sound_signature and all(
+                os.path.isfile(self._sound_paths.get(k, "")) for k in ("click", "delete", "typing")):
+            return
+        if self._sound_regen_job:
+            try:
+                self.root.after_cancel(self._sound_regen_job)
+            except Exception:
+                pass
+            self._sound_regen_job = None
+
+        def generate():
+            self._sound_regen_job = None
+            try:
+                os.makedirs(CFG_DIR, exist_ok=True)
+                for kind, volume in zip(("click", "delete", "typing"), volumes):
+                    path = os.path.join(CFG_DIR, "desktop_" + kind + ".wav")
+                    self._write_input_sound(path, kind, volume)
+                    self._sound_paths[kind] = path
+                self._sound_signature = volumes
+            except Exception:
+                pass
+
+        if immediate:
+            generate()
+        else:
+            self._sound_regen_job = self.root.after(220, generate)
+
+    def _play_input_sound(self, kind):
+        if self.paused or self.system_paused or not self.cfg.get("sound_" + kind, False):
+            return
+        path = self._sound_paths.get(kind)
+        if not path or not os.path.isfile(path):
+            return
+        now = time.monotonic()
+        minimum_gap = {"click": 0.045, "delete": 0.060, "typing": 0.032}[kind]
+        with self._input_sound_lock:
+            if now - self._last_input_sound.get(kind, 0.0) < minimum_gap:
+                return
+            self._last_input_sound[kind] = now
+        try:
+            import winsound
+            winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+        except Exception:
+            pass
+
+    def _start_input_hooks(self):
+        """Listen only for generic input events. Key values/text are never stored."""
+        if not IS_WIN or self._hook_started:
+            return
+        self._hook_started = True
+        self._hook_thread = threading.Thread(
+            target=self._input_hook_loop, name="MinaDesktopInputSounds", daemon=True)
+        self._hook_thread.start()
+
+    def _input_hook_loop(self):
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        WH_KEYBOARD_LL, WH_MOUSE_LL = 13, 14
+        WM_KEYDOWN, WM_SYSKEYDOWN = 0x0100, 0x0104
+        WM_LBUTTONDOWN, WM_RBUTTONDOWN = 0x0201, 0x0204
+        WM_MBUTTONDOWN, WM_XBUTTONDOWN = 0x0207, 0x020B
+
+        class KBDLLHOOKSTRUCT(ctypes.Structure):
+            _fields_ = [("vkCode", wintypes.DWORD), ("scanCode", wintypes.DWORD),
+                        ("flags", wintypes.DWORD), ("time", wintypes.DWORD),
+                        ("dwExtraInfo", ctypes.c_size_t)]
+
+        HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, ctypes.c_int,
+                                      wintypes.WPARAM, wintypes.LPARAM)
+        user32.SetWindowsHookExW.argtypes = [ctypes.c_int, HOOKPROC, wintypes.HINSTANCE, wintypes.DWORD]
+        user32.SetWindowsHookExW.restype = ctypes.c_void_p
+        user32.CallNextHookEx.argtypes = [ctypes.c_void_p, ctypes.c_int,
+                                          wintypes.WPARAM, wintypes.LPARAM]
+        user32.CallNextHookEx.restype = ctypes.c_ssize_t
+        user32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
+        user32.UnhookWindowsHookEx.restype = wintypes.BOOL
+        kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+        kernel32.GetModuleHandleW.restype = wintypes.HINSTANCE
+        self._hook_thread_id = kernel32.GetCurrentThreadId()
+        module = kernel32.GetModuleHandleW(None)
+
+        def keyboard_proc(code, message, data_ptr):
+            if code >= 0 and message in (WM_KEYDOWN, WM_SYSKEYDOWN):
+                try:
+                    key = ctypes.cast(data_ptr, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents.vkCode
+                    if key in (0x08, 0x2E):
+                        self._play_input_sound("delete")
+                    elif (0x30 <= key <= 0x39 or 0x41 <= key <= 0x5A
+                          or 0x60 <= key <= 0x69 or key in
+                          (0x09, 0x0D, 0x20, 0xBA, 0xBB, 0xBC, 0xBD,
+                           0xBE, 0xBF, 0xC0, 0xDB, 0xDC, 0xDD, 0xDE)):
+                        self._play_input_sound("typing")
+                except Exception:
+                    pass
+            return user32.CallNextHookEx(None, code, message, data_ptr)
+
+        def mouse_proc(code, message, data_ptr):
+            if code >= 0 and message in (WM_LBUTTONDOWN, WM_RBUTTONDOWN,
+                                         WM_MBUTTONDOWN, WM_XBUTTONDOWN):
+                self._play_input_sound("click")
+            return user32.CallNextHookEx(None, code, message, data_ptr)
+
+        keyboard_callback = HOOKPROC(keyboard_proc)
+        mouse_callback = HOOKPROC(mouse_proc)
+        self._hook_callbacks = (keyboard_callback, mouse_callback)
+        keyboard_hook = user32.SetWindowsHookExW(WH_KEYBOARD_LL, keyboard_callback, module, 0)
+        mouse_hook = user32.SetWindowsHookExW(WH_MOUSE_LL, mouse_callback, module, 0)
+        self._hook_handles = [h for h in (keyboard_hook, mouse_hook) if h]
+        if not self._hook_handles:
+            self._hook_thread_id = 0
+            self._hook_callbacks = None
+            return
+        msg = wintypes.MSG()
+        try:
+            while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+                user32.TranslateMessage(ctypes.byref(msg))
+                user32.DispatchMessageW(ctypes.byref(msg))
+        finally:
+            for handle in self._hook_handles:
+                try:
+                    user32.UnhookWindowsHookEx(handle)
+                except Exception:
+                    pass
+            self._hook_handles = []
+            self._hook_thread_id = 0
+            self._hook_callbacks = None
+
+    def _stop_input_hooks(self):
+        if not IS_WIN or not self._hook_thread_id:
+            return
+        try:
+            import ctypes
+            ctypes.windll.user32.PostThreadMessageW(self._hook_thread_id, 0x0012, 0, 0)
+        except Exception:
+            pass
+
+    def show_sound_panel(self):
+        if self.sound_panel is not None and self.sound_panel.winfo_exists():
+            self.sound_panel.deiconify()
+            self.sound_panel.lift()
+            return
+        p = self.sound_panel = tk.Toplevel(self.panel)
+        p.title("Desktop sound effects")
+        p.resizable(False, False)
+        p.attributes("-topmost", True)
+        p.protocol("WM_DELETE_WINDOW", p.withdraw)
+        frame = ttk.Frame(p, padding=14)
+        frame.grid(sticky="nsew")
+        ttk.Label(frame, text="Desktop sound effects", font=("Segoe UI", 12, "bold")).grid(
+            row=0, columnspan=2, sticky="w", pady=(0, 8))
+        controls = (
+            ("Mouse click sound", "sound_click", "Click volume", "click_volume"),
+            ("Delete / Backspace sound", "sound_delete", "Delete volume", "delete_volume"),
+            ("Typing sound", "sound_typing", "Typing volume", "typing_volume"),
+        )
+        row = 1
+        for label, enabled_key, volume_label, volume_key in controls:
+            ttk.Checkbutton(frame, text=label, variable=self.V[enabled_key],
+                            command=self.apply).grid(row=row, columnspan=2, sticky="w", pady=(3, 0))
+            row += 1
+            ttk.Label(frame, text=volume_label).grid(row=row, column=0, sticky="w")
+            ttk.Scale(frame, from_=0, to=100, variable=self.V[volume_key], length=190,
+                      command=lambda _=None: self.apply()).grid(row=row, column=1, pady=2)
+            row += 1
+        ttk.Label(frame, text="Works across Windows apps. The app reacts to key events only;\n"
+                              "it does not read, record, or save the text you type.",
+                  foreground="#666666", justify="left").grid(row=row, columnspan=2,
+                                                               sticky="w", pady=(8, 4))
+        ttk.Button(frame, text="Close", command=p.withdraw).grid(row=row + 1, columnspan=2, pady=(4, 0))
+        self.bind_hover(frame)
+
     # ---------- control panel ----------
     def build_panel(self):
         p = self.panel = tk.Toplevel(self.root)
@@ -847,6 +1074,9 @@ class App:
         check("Restore my wallpaper on exit", "restore_wp")
         check("Music", "music")
         scale("Volume", "volume", 0, 100)
+        ttk.Button(f, text="Desktop sound effects…", command=self.show_sound_panel).grid(
+            row=row[0], columnspan=2, sticky="w", pady=(0, 5))
+        row[0] += 1
         check("Sparkle on tree & fireplace", "sparkle")
         check("Snow", "snow")
         check("Snow tractor on taskbar", "tractor")
@@ -889,6 +1119,9 @@ class App:
         self.c.itemconfigure(self.msg, text=text)
         self.c.itemconfigure(self.msg_shadow, text=text)
         self.music.set(self.cfg["music"], self.cfg["volume"])
+        self._refresh_input_sounds(immediate=first)
+        if first:
+            self._start_input_hooks()
         self.set_wp(self.cfg["wallpaper"])
         show_scene_sparkles = self.cfg["sparkle"] and not self.has_custom_wallpaper()
         self.c.itemconfigure("spark", state="normal" if show_scene_sparkles else "hidden")
@@ -904,6 +1137,7 @@ class App:
         # Original wallpaper is per run; next launch captures the current Windows wallpaper.
         self.cfg["orig_wp"] = ""
         self.music.close()
+        self._stop_input_hooks()
         save_cfg(self.cfg)
         if self.tray:
             try:
