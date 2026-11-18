@@ -26,7 +26,7 @@ DEFAULTS = dict(snow=True, amount=150, speed=5.0, wind=0.0, var_wind=True,
                 show_message=False, message="Merry Christmas", autostart=False,
                 wallpaper=True, restore_wp=True, music=True, volume=60.0,
                 sparkle=True, tractor=True, pile=True, orig_wp="", custom_wp="",
-                sound_click=True, sound_delete=True, sound_typing=True,
+                sound_click=True, sound_delete=True, sound_typing=True, edge_snow=True,
                 click_volume=28.0, delete_volume=34.0, typing_volume=20.0)
 UI_KEYS = [k for k in DEFAULTS if k not in ("orig_wp", "custom_wp")]
 SPARK = ["#fff6c9", "#ffd54a", "#ffab40", "#ffffff"]
@@ -227,6 +227,7 @@ class App:
         self._hook_started = False
         self._hook_callbacks = None
         self._hook_handles = []
+        self._desktop_layer_active = True
         self.root = r = tk.Tk()
         r.title(APP)
         r.overrideredirect(True)
@@ -255,6 +256,7 @@ class App:
         self.music = Music(res("holiday_ambiance.mp3"))
         self.build_sparks()
         self.build_ground()
+        self.build_snow_edges()
         self.build_lights()
         self.build_message()
         self.build_panel()
@@ -262,6 +264,7 @@ class App:
         self.start_tray()
         self.tick()
         self.blink_lights()
+        self.root.after(350, self.monitor_desktop_visibility)
 
     # ---------- decorations ----------
     def build_lights(self):
@@ -286,6 +289,39 @@ class App:
                 item = c.create_oval(x - 5, y - 3, x + 5, y + 9, fill=col, outline="", tags="lights")
                 self.bulbs.append((item, col, k))
                 k += 1
+
+    def monitor_desktop_visibility(self):
+        """Keep the desktop layer behind other apps; browser pages use the companion extension."""
+        if IS_WIN:
+            try:
+                import ctypes
+                from ctypes import wintypes
+                user32 = ctypes.windll.user32
+                hwnd = user32.GetForegroundWindow()
+                class_name = ctypes.create_unicode_buffer(128)
+                user32.GetClassNameW(hwnd, class_name, len(class_name))
+                shell_classes = {"Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"}
+                panel_open = False
+                try:
+                    panel_open = self.panel.state() != "withdrawn"
+                    if self.sound_panel is not None and self.sound_panel.winfo_exists():
+                        panel_open = panel_open or self.sound_panel.state() != "withdrawn"
+                except tk.TclError:
+                    pass
+                show_layer = class_name.value in shell_classes or panel_open
+                if show_layer != self._desktop_layer_active:
+                    self._desktop_layer_active = show_layer
+                    self.root.attributes("-topmost", show_layer)
+                    if show_layer:
+                        self.root.deiconify()
+                        self.root.lift()
+                    else:
+                        self.root.attributes("-topmost", False)
+                        self.root.lower()
+            except Exception:
+                # If Windows window detection fails, leave the visual overlay usable.
+                pass
+        self.root.after(450, self.monitor_desktop_visibility)
 
     def blink_lights(self):
         if not (self.paused or self.system_paused):
@@ -312,6 +348,51 @@ class App:
             self.flakes.append([x, y, r, 0.6 + r * 0.45, random.uniform(0, 6.28), item])
         while len(self.flakes) > want:
             self.c.delete(self.flakes.pop()[5])
+
+    # ---------- snow along the screen edges ----------
+    def build_snow_edges(self):
+        """Soft snow caps and drifting frost stay close to the screen perimeter."""
+        c, W, H = self.c, self.W, self.H
+        width = max(5, int(10 * self.k))
+        left, right = [], []
+        for y in range(-20, H + 50, max(28, int(42 * self.k))):
+            left.extend([random.uniform(4, 15) * self.k, y])
+            right.extend([W - random.uniform(4, 15) * self.k, y])
+        c.create_line(*left, fill="#dceefa", width=width, smooth=True,
+                      capstyle=tk.ROUND, tags="edge_snow")
+        c.create_line(*left, fill="#ffffff", width=max(2, width // 3), smooth=True,
+                      capstyle=tk.ROUND, tags="edge_snow")
+        c.create_line(*right, fill="#dceefa", width=width, smooth=True,
+                      capstyle=tk.ROUND, tags="edge_snow")
+        c.create_line(*right, fill="#ffffff", width=max(2, width // 3), smooth=True,
+                      capstyle=tk.ROUND, tags="edge_snow")
+        top = []
+        for x in range(-20, W + 40, max(35, int(58 * self.k))):
+            top.extend([x, random.uniform(4, 12) * self.k])
+        c.create_line(*top, fill="#eaf6ff", width=max(5, int(8 * self.k)),
+                      smooth=True, capstyle=tk.ROUND, tags="edge_snow")
+        self.edge_frost = []
+        for side in (-1, 1):
+            for _ in range(max(14, self.H // 55)):
+                y = random.uniform(0, H)
+                x = random.uniform(1, 13) * self.k if side < 0 else W - random.uniform(1, 13) * self.k
+                r = random.uniform(1.0, 2.7) * self.k
+                item = c.create_oval(x-r, y-r, x+r, y+r, fill="#ffffff", outline="", tags="edge_snow")
+                self.edge_frost.append([item, x, y, r, side, random.uniform(0.01, 0.05)])
+
+    def update_snow_edges(self):
+        visible = "normal" if self.cfg.get("snow", True) and self.cfg.get("edge_snow", True) else "hidden"
+        self.c.itemconfigure("edge_snow", state=visible)
+        if visible == "hidden":
+            return
+        for flake in self.edge_frost:
+            item, x, y, r, side, phase = flake
+            y += 0.24 + r * 0.12
+            if y > self.H + 4:
+                y = -4
+            x += math.sin(self.n * phase) * 0.16
+            flake[1], flake[2] = x, y
+            self.c.coords(item, x-r, y-r, x+r, y+r)
 
     # ---------- santa ----------
     def draw_santa(self, x, y, s):
@@ -395,6 +476,7 @@ class App:
             self.c.coords(f[5], f[0] - r, f[1] - r, f[0] + r, f[1] + r)
         self.n += 1
         self.update_sparks()
+        self.update_snow_edges()
         self.update_ground()
         if self.n % 150 == 0:
             self.music.keepalive()
@@ -1087,6 +1169,7 @@ class App:
         row[0] += 1
         check("Sparkle on tree & fireplace", "sparkle")
         check("Snow", "snow")
+        check("Snow on screen edges", "edge_snow")
         check("Snow tractor on taskbar", "tractor")
         check("Snow piles on taskbar", "pile")
         scale("Amount", "amount", 10, 400)
