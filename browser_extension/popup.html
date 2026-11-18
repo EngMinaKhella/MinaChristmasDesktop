@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mina Christmas Desktop</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="panel">
+    <header>
+      <div class="brand-mark">❄</div>
+      <div>
+        <h1>Mina Christmas Desktop</h1>
+        <p>Browser winter effects · v1.1.0</p>
+      </div>
+    </header>
+    <section class="group">
+      <label class="toggle"><span>Falling snow</span><input id="snow" type="checkbox"><i></i></label>
+      <label class="toggle"><span>Snow along page edges</span><input id="edgeSnow" type="checkbox"><i></i></label>
+      <label class="toggle"><span>Santa sleigh fly-by</span><input id="santa" type="checkbox"><i></i></label>
+      <label class="toggle"><span>Interactive snowman</span><input id="snowman" type="checkbox"><i></i></label>
+      <label class="toggle"><span>Christmas mouse cursor</span><input id="cursor" type="checkbox"><i></i></label>
+    </section>
+    <section class="group sounds">
+      <h2>Desktop-style sounds</h2>
+      <label class="toggle"><span>Mouse click</span><input id="clickSound" type="checkbox"><i></i></label>
+      <label class="toggle"><span>Typing</span><input id="typingSound" type="checkbox"><i></i></label>
+      <label class="toggle"><span>Delete / Backspace</span><input id="deleteSound" type="checkbox"><i></i></label>
+      <label class="volume"><span>Sound level</span><input id="soundVolume" type="range" min="0" max="0.6" step="0.01"></label>
+    </section>
+    <footer><span class="snowflake">✦</span> Effects never block page clicks, typing or scrolling.</footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
