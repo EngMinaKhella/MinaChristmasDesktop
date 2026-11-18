@@ -233,7 +233,7 @@
       }
       cursorStyle.textContent = `
         html, body, body *:not(input):not(textarea):not([contenteditable="true"]) {
-          cursor: var(--mina-winter-cursor), auto !important;
+          cursor: var(--mina-winter-cursor) !important;
         }
         a, button, [role="button"], input[type="button"], input[type="submit"] {
           cursor: var(--mina-winter-cursor), pointer !important;
