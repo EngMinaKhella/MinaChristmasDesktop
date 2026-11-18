@@ -1,6 +1,7 @@
 const DEFAULTS = {
   snow: true, edgeSnow: true, santa: true, snowman: true, cursor: true,
-  clickSound: true, typingSound: true, deleteSound: true, soundVolume: 0.22
+  clickSound: true, typingSound: true, deleteSound: true,
+  clickVolume: 0.22, typingVolume: 0.16, deleteVolume: 0.22
 };
 
 document.addEventListener("DOMContentLoaded", () => {
