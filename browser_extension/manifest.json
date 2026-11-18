@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Mina Christmas Desktop — Browser Winter Effects",
+  "version": "1.1.0",
+  "description": "Gentle falling snow, festive edge frost, Santa fly-bys and optional Christmas sounds for Chrome and Edge.",
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "Mina Christmas Desktop",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
