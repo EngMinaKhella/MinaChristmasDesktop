@@ -93,27 +93,68 @@
   function drawEdges(time) {
     if (!settings.edgeSnow) return;
     ctx.save();
-    ctx.globalAlpha = .58;
+
+    // Soft snowy banks grow inward from both sides and drift subtly as flakes land.
+    ctx.globalAlpha = .70;
     ctx.fillStyle = "#eaf7ff";
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    for (let y = 0; y <= height; y += 40) {
-      ctx.lineTo(5 + Math.sin(y * .021 + time * .0003) * 3, y);
+    for (let y = 0; y <= height; y += 24) {
+      const drift = Math.sin(y * .018 + time * .00045) * 3.5;
+      const depth = 7 + 5 * (0.5 + 0.5 * Math.sin(y * .011 + time * .00025));
+      ctx.lineTo(depth + drift, y);
     }
     ctx.lineTo(0, height);
     ctx.closePath();
     ctx.fill();
+
     ctx.beginPath();
     ctx.moveTo(width, 0);
-    for (let y = 0; y <= height; y += 40) {
-      ctx.lineTo(width - 5 + Math.sin(y * .019 - time * .00025) * 3, y);
+    for (let y = 0; y <= height; y += 24) {
+      const drift = Math.sin(y * .017 - time * .0004) * 3.5;
+      const depth = 7 + 5 * (0.5 + 0.5 * Math.sin(y * .013 - time * .0003));
+      ctx.lineTo(width - depth + drift, y);
     }
     ctx.lineTo(width, height);
     ctx.closePath();
     ctx.fill();
-    ctx.globalAlpha = .44;
-    ctx.fillRect(0, 0, width, 3);
-    ctx.fillRect(0, height - 4, width, 4);
+
+    // Accumulated snow makes soft, uneven drifts along the bottom and top edges.
+    ctx.globalAlpha = .82;
+    ctx.beginPath();
+    ctx.moveTo(0, height);
+    for (let x = 0; x <= width; x += 28) {
+      const wave = Math.sin(x * .018 + time * .00035) * 4
+                 + Math.sin(x * .043 - time * .00022) * 2.2;
+      const mound = 9 + 8 * (0.5 + 0.5 * Math.sin(x * .009 + time * .00018));
+      ctx.lineTo(x, height - mound - wave);
+    }
+    ctx.lineTo(width, height);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalAlpha = .40;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    for (let x = 0; x <= width; x += 34) {
+      ctx.lineTo(x, 4 + Math.sin(x * .017 + time * .00028) * 3);
+    }
+    ctx.lineTo(width, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Tiny sparkling crystals on the snow banks.
+    ctx.globalAlpha = .50;
+    ctx.fillStyle = "#ffffff";
+    for (let i = 0; i < 28; i++) {
+      const x = (i * 97 + Math.sin(time * .0004 + i) * 8) % width;
+      const y = (i * 61 + time * .012) % height;
+      if (x < 18 || x > width - 18 || y > height - 24) {
+        ctx.beginPath();
+        ctx.arc(x, y, 1 + (i % 3) * .35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     ctx.restore();
   }
 
