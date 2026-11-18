@@ -3,6 +3,7 @@
 The background is generated locally with Pillow and displayed in a click-through
 WorkerW child window behind desktop icons and application windows.
 """
+import base64
 import math
 import os
 import random
@@ -11,6 +12,22 @@ import ctypes
 from ctypes import wintypes
 
 from PIL import Image, ImageDraw, ImageFilter, ImageOps, ImageTk
+
+
+_ASSET_PARTS = (
+    "winter_cabin_scene.jpg.b64.01",
+    "winter_cabin_scene.jpg.b64.02",
+    "winter_cabin_scene.jpg.b64.03",
+    "winter_cabin_scene.jpg.b64.04",
+    "winter_cabin_scene.jpg.b64.05",
+    "winter_cabin_scene.jpg.b64.06",
+    "winter_cabin_scene.jpg.b64.07",
+    "winter_cabin_scene.jpg.b64.08",
+    "winter_cabin_scene.jpg.b64.09",
+    "winter_cabin_scene.jpg.b64.10",
+    "winter_cabin_scene.jpg.b64.11",
+    "winter_cabin_scene.jpg.b64.12",
+)
 
 
 def _create_cabin_scene(path):
@@ -207,11 +224,24 @@ def _create_cabin_scene(path):
     return path
 
 
-def bundled_scene_path(_resource, app_dir):
-    """Create/cache the bundled scene image in the user's local app-data folder."""
+def bundled_scene_path(resource, app_dir):
+    """Decode the supplied original cabin artwork into a cached local JPEG."""
     os.makedirs(app_dir, exist_ok=True)
     target = os.path.join(app_dir, "winter_cabin_scene.jpg")
-    if not os.path.isfile(target) or os.path.getsize(target) < 30_000:
+    if os.path.isfile(target) and os.path.getsize(target) > 30_000:
+        return target
+    try:
+        encoded = []
+        for part_name in _ASSET_PARTS:
+            with open(resource(part_name), "r", encoding="ascii") as stream:
+                encoded.append(stream.read().strip())
+        data = base64.b64decode("".join(encoded), validate=True)
+        temp = target + ".tmp"
+        with open(temp, "wb") as stream:
+            stream.write(data)
+        os.replace(temp, target)
+    except Exception:
+        # Keep the app usable when running from an incomplete source checkout.
         _create_cabin_scene(target)
     return target
 
@@ -256,6 +286,7 @@ class AnimatedWallpaper:
         self.height = max(360, int(height))
         self.frame_number = 0
         self.after_id = None
+        self.paused = False
         self.photo = None
         self.closed = False
         self._random = random.Random(2026)
@@ -361,8 +392,26 @@ class AnimatedWallpaper:
 
         return image.convert("RGB")
 
-    def _tick(self):
+    def set_paused(self, paused):
+        """Pause the animated WorkerW layer while another app is in front."""
         if self.closed:
+            return
+        paused = bool(paused)
+        if paused == self.paused:
+            return
+        self.paused = paused
+        if paused and self.after_id is not None:
+            try:
+                self.root.after_cancel(self.after_id)
+            except Exception:
+                pass
+            self.after_id = None
+        elif not paused and self.after_id is None:
+            self._tick()
+
+    def _tick(self):
+        if self.closed or self.paused:
+            self.after_id = None
             return
         try:
             frame = self._render()
