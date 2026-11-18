@@ -17,6 +17,7 @@ import struct
 from tkinter import ttk, filedialog, messagebox
 
 APP = "MinaChristmasDesktop"
+APP_VERSION = "1.1.0"
 KEY = "#010101"  # this exact colour becomes see-through
 IS_WIN = sys.platform == "win32"
 CFG_DIR = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), APP)
@@ -825,7 +826,7 @@ class App:
                        self.cfg.get("volume", 60))
         if self.tray:
             suffix = " — Paused" if (self.paused or self.system_paused) else ""
-            self.tray.title = "Mina Christmas Desktop" + suffix
+            self.tray.title = f"Mina Christmas Desktop v{APP_VERSION}" + suffix
 
     def _make_tray_image(self):
         from PIL import Image, ImageDraw
@@ -853,7 +854,7 @@ class App:
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Exit Mina Christmas Desktop", self._tray_quit),
             )
-            self.tray = pystray.Icon(APP, self._make_tray_image(), "Mina Christmas Desktop", menu)
+            self.tray = pystray.Icon(APP, self._make_tray_image(), f"Mina Christmas Desktop v{APP_VERSION}", menu)
             self.tray_thread = threading.Thread(target=self.tray.run, name="MinaTray", daemon=True)
             self.tray_thread.start()
         except Exception as exc:
@@ -892,7 +893,7 @@ class App:
                        self.cfg.get("volume", 60))
         if self.tray:
             suffix = " — Paused" if (self.paused or self.system_paused) else ""
-            self.tray.title = "Mina Christmas Desktop" + suffix
+            self.tray.title = f"Mina Christmas Desktop v{APP_VERSION}" + suffix
 
     def bind_hover(self, w):
         for ch in w.winfo_children():
@@ -1141,7 +1142,7 @@ class App:
             v = cfg[k]
             self.V[k] = (tk.BooleanVar if isinstance(v, bool) else
                          tk.StringVar if isinstance(v, str) else tk.DoubleVar)(value=v)
-        ttk.Label(f, text="MinaChristmasDesktop", font=("Segoe UI", 14, "bold")).grid(columnspan=2, pady=(0, 8))
+        ttk.Label(f, text=f"Mina Christmas Desktop v{APP_VERSION}", font=("Segoe UI", 14, "bold")).grid(columnspan=2, pady=(0, 8))
         row = [1]
 
         def check(text, key):
