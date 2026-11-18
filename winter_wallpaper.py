@@ -18,6 +18,14 @@ _ASSET_PARTS = (
     "winter_cabin_scene.jpg.b64.02",
     "winter_cabin_scene.jpg.b64.03",
     "winter_cabin_scene.jpg.b64.04",
+    "winter_cabin_scene.jpg.b64.05",
+    "winter_cabin_scene.jpg.b64.06",
+    "winter_cabin_scene.jpg.b64.07",
+    "winter_cabin_scene.jpg.b64.08",
+    "winter_cabin_scene.jpg.b64.09",
+    "winter_cabin_scene.jpg.b64.10",
+    "winter_cabin_scene.jpg.b64.11",
+    "winter_cabin_scene.jpg.b64.12",
 )
 
 
@@ -83,6 +91,7 @@ class AnimatedWallpaper:
         self.height = max(360, int(height))
         self.frame_number = 0
         self.after_id = None
+        self.paused = False
         self.photo = None
         self.closed = False
         self._random = random.Random(2026)
@@ -139,10 +148,19 @@ class AnimatedWallpaper:
             return False
 
         try:
+            user32.SetParent.argtypes = [wintypes.HWND, wintypes.HWND]
+            user32.SetParent.restype = wintypes.HWND
             user32.SetParent(self.hwnd, parent)
 
             get_long = getattr(user32, "GetWindowLongPtrW", user32.GetWindowLongW)
             set_long = getattr(user32, "SetWindowLongPtrW", user32.SetWindowLongW)
+            get_long.argtypes = [wintypes.HWND, ctypes.c_int]
+            get_long.restype = ctypes.c_ssize_t
+            set_long.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_ssize_t]
+            set_long.restype = ctypes.c_ssize_t
+            user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int,
+                                           ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+            user32.SetWindowPos.restype = wintypes.BOOL
 
             style = int(get_long(self.hwnd, -16))
             style = (style | 0x40000000 | 0x10000000) & ~0x80000000  # CHILD + VISIBLE, not POPUP
@@ -167,7 +185,7 @@ class AnimatedWallpaper:
         # A soft amber pulse around the visible fireplace, not a full-screen flash.
         glow = Image.new("RGBA", image.size, (0, 0, 0, 0))
         glow_draw = ImageDraw.Draw(glow)
-        cx, cy = int(self.width * 0.70), int(self.height * 0.64)
+        cx, cy = int(self.width * 0.49), int(self.height * 0.62)
         pulse = 0.5 + 0.5 * __import__("math").sin(t * 2.1)
         radius_x = max(45, int(self.width * 0.075))
         radius_y = max(30, int(self.height * 0.075))
@@ -192,15 +210,15 @@ class AnimatedWallpaper:
         # Tiny warm twinkles around the Christmas tree visible through the window.
         for i in range(8):
             phase = t * 1.8 + i * 1.37
-            x = int(self.width * (0.63 + 0.055 * ((i % 4) / 3)))
-            y = int(self.height * (0.46 + 0.10 * (i // 4)) + 4 * __import__("math").sin(phase))
+            x = int(self.width * (0.16 + 0.12 * ((i % 4) / 3)))
+            y = int(self.height * (0.27 + 0.12 * (i // 4)) + 4 * __import__("math").sin(phase))
             alpha = int(75 + 130 * (0.5 + 0.5 * __import__("math").sin(phase)))
             r = 2 if self.width < 1500 else 3
             draw.ellipse((x-r, y-r, x+r, y+r), fill=(255, 218, 110, alpha))
 
         # A small drifting chimney wisp adds motion to the snowy roofline.
-        smoke_x = int(self.width * 0.785)
-        smoke_y = int(self.height * 0.13)
+        smoke_x = int(self.width * 0.32)
+        smoke_y = int(self.height * 0.14)
         for i in range(4):
             drift = int(7 * __import__("math").sin(t * 0.7 + i))
             lift = int((t * 5 + i * 12) % 44)
@@ -213,8 +231,26 @@ class AnimatedWallpaper:
 
         return image.convert("RGB")
 
-    def _tick(self):
+    def set_paused(self, paused):
+        """Pause the animated WorkerW layer while another app is in front or Windows is locked."""
         if self.closed:
+            return
+        paused = bool(paused)
+        if paused == self.paused:
+            return
+        self.paused = paused
+        if paused and self.after_id is not None:
+            try:
+                self.root.after_cancel(self.after_id)
+            except Exception:
+                pass
+            self.after_id = None
+        elif not paused and self.after_id is None:
+            self._tick()
+
+    def _tick(self):
+        if self.closed or self.paused:
+            self.after_id = None
             return
         try:
             frame = self._render()
