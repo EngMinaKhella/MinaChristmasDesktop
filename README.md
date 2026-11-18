@@ -1,10 +1,12 @@
-# Mina Christmas Desktop
+# Mina Christmas Desktop v1.1.0
 
-A lightweight Christmas desktop overlay for Windows: animated snowfall, festive lights, Santa fly-bys, taskbar snow effects, and optional background music.
+Mina Christmas Desktop v1.1.0 is a Windows desktop winter overlay with falling snow, screen-edge frost, animated Santa fly-bys, a snow-clearing taskbar tractor, festive lights, optional music, and independent click / typing / delete sound effects.
+
+The companion Chrome / Microsoft Edge extension adds gentle snow, page-edge frost, Santa fly-bys, a snowman hover animation, a seasonal cursor, and optional input sounds inside web pages.
 
 **The app runs from the Windows notification area (system tray), beside the clock/network/volume icons.** Its transparent desktop overlay is click-through, so normal mouse interaction with your apps continues to work.
 
-## Download for Windows
+## v1.1.0 development status\n\nThis version is being prepared on the feature branch `feature/desktop-winter-experience-v1.1.0`. It has not been published as a permanent GitHub Release yet. Do not create the `v1.1.0` tag until the desktop and browser features have been tested on Windows.\n\n## Browser extension (Chrome and Edge)\n\nSee [`browser_extension/README_AR.md`](browser_extension/README_AR.md) for installation. Open `chrome://extensions` or `edge://extensions`, enable Developer mode, choose **Load unpacked**, and select the `browser_extension` folder. The overlay is pointer-transparent, hides for hidden tabs and full-screen content, and only runs on ordinary HTTP / HTTPS pages. It does not modify browser toolbar, tabs, or address bar.\n\n## Download for Windows
 
 1. Open the repository's **Releases** page.
 2. Download `MinaChristmasDesktop.exe` from the latest release.
@@ -35,7 +37,7 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-The workflow builds the Windows x64 EXE and attaches it to the GitHub Release for that tag.
+The workflow builds the Windows x64 EXE, packages the browser extension ZIP, and attaches the EXE to the GitHub Release for a version tag. The development branch also runs the build and uploads both files as temporary workflow artifacts.
 
 ## Desktop, lock screen, and system tray
 
