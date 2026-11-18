@@ -1,6 +1,6 @@
 const DEFAULTS = {
   snow: true, edgeSnow: true, santa: true, snowman: true, cursor: true,
-  clickSound: true, typingSound: true, deleteSound: true,
+  clickSound: false, typingSound: false, deleteSound: false,
   clickVolume: 0.22, typingVolume: 0.16, deleteVolume: 0.22
 };
 
