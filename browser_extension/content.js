@@ -9,9 +9,9 @@
     santa: true,
     snowman: true,
     cursor: true,
-    clickSound: true,
-    typingSound: true,
-    deleteSound: true,
+    clickSound: false,
+    typingSound: false,
+    deleteSound: false,
     clickVolume: 0.22,
     typingVolume: 0.16,
     deleteVolume: 0.22,
@@ -40,7 +40,8 @@
     const style = document.createElement("style");
     style.textContent = `
       :host { all: initial; }
-      canvas { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; }
+      canvas, .sleigh, .snowman { pointer-events:none!important; }
+      canvas { position:fixed; inset:0; width:100%; height:100%; }
       .sleigh { position:fixed; top:22px; left:-180px; font:48px/1 "Segoe UI Emoji",sans-serif; white-space:nowrap; opacity:0; filter:drop-shadow(0 2px 7px #75cfff); will-change:transform; }
       .sleigh.go { opacity:1; animation:mina-sleigh-pass 17s linear forwards; }
       @keyframes mina-sleigh-pass { from { transform:translate3d(-180px,0,0) rotate(-3deg); } 35% { transform:translate3d(35vw,20px,0) rotate(1deg); } 70% { transform:translate3d(75vw,-5px,0) rotate(-1deg); } to { transform:translate3d(calc(100vw + 220px),16px,0) rotate(2deg); } }
@@ -244,7 +245,7 @@
           cursor: var(--mina-winter-cursor) !important;
         }
         a, button, [role="button"], input[type="button"], input[type="submit"] {
-          cursor: var(--mina-winter-cursor), pointer !important;
+          cursor: var(--mina-winter-cursor) !important;
         }
       `;
     } else {
